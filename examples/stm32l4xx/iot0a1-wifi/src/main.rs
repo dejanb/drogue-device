@@ -4,8 +4,6 @@
 #![allow(incomplete_features)]
 #![allow(dead_code)]
 #![feature(generic_associated_types)]
-#![feature(min_type_alias_impl_trait)]
-#![feature(impl_trait_in_bindings)]
 #![feature(type_alias_impl_trait)]
 #![feature(concat_idents)]
 
@@ -14,8 +12,7 @@ use panic_probe as _;
 
 use drogue_device::{actors::ticker::*, actors::led::*, *};
 use embassy_stm32::{
-    gpio::{Level, Output},
-    interrupt,
+    gpio::{Level, Output, Speed},
     peripherals::PA5,
     Peripherals,
 };
@@ -57,12 +54,12 @@ async fn main(spawner: embassy::executor::Spawner, p: Peripherals) {
 
     DEVICE.configure(MyDevice {
         ticker: ActorContext::new(Ticker::new(Duration::from_millis(500), LedMessage::Toggle)),
-        led: ActorContext::new(Led::new(Output::new(p.PA5, Level::High))),
+        led: ActorContext::new(Led::new(Output::new(p.PA5, Level::High, Speed::Low))),
     });
 
-    DEVICE.mount(|device| {
+    DEVICE.mount(|device| async move {
         let led = device.led.mount((), spawner);
         let ticker = device.ticker.mount(led, spawner);
-        ticker.notify(TickerCommand::Start).unwrap();
-    });
+        ticker
+    }).await;
 }
