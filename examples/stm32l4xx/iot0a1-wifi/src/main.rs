@@ -10,15 +10,14 @@
 use defmt_rtt as _;
 use panic_probe as _;
 
-use drogue_device::{actors::ticker::*, actors::led::*, *};
+use drogue_device::{actors::led::*, actors::ticker::*, *};
+use embassy_stm32::dbgmcu::Dbgmcu;
 use embassy_stm32::{
     gpio::{Level, Output, Speed},
     peripherals::PA5,
     Peripherals,
 };
-
 use embassy::time::Duration;
-use stm32l4::stm32l4x2 as pac;
 
 type Led1Pin = Output<'static, PA5>;
 
@@ -31,24 +30,9 @@ static DEVICE: DeviceContext<MyDevice> = DeviceContext::new();
 
 #[embassy::main]
 async fn main(spawner: embassy::executor::Spawner, p: Peripherals) {
-    let pp = pac::Peripherals::take().unwrap();
-
-    pp.DBGMCU.cr.modify(|_, w| {
-        w.dbg_sleep().set_bit();
-        w.dbg_standby().set_bit();
-        w.dbg_stop().set_bit()
-    });
-
-    pp.RCC.ahb1enr.modify(|_, w| w.dma1en().set_bit());
-
-    pp.RCC.ahb2enr.modify(|_, w| {
-        w.gpioaen().set_bit();
-        w.gpioben().set_bit();
-        w.gpiocen().set_bit();
-        w.gpioden().set_bit();
-        w.gpioeen().set_bit();
-        w
-    });
+    unsafe {
+        Dbgmcu::enable_all();
+    }
 
     defmt::info!("Starting up...");
 
@@ -57,9 +41,11 @@ async fn main(spawner: embassy::executor::Spawner, p: Peripherals) {
         led: ActorContext::new(Led::new(Output::new(p.PA5, Level::High, Speed::Low))),
     });
 
-    DEVICE.mount(|device| async move {
-        let led = device.led.mount((), spawner);
-        let ticker = device.ticker.mount(led, spawner);
-        ticker
-    }).await;
+    DEVICE
+        .mount(|device| async move {
+            let led = device.led.mount((), spawner);
+            let ticker = device.ticker.mount(led, spawner);
+            ticker
+        })
+        .await;
 }
