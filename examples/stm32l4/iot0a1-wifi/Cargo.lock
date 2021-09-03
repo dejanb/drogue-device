@@ -698,6 +698,7 @@ name = "iot0a1-wifi"
 version = "0.1.0"
 dependencies = [
  "atomic-polyfill",
+ "cortex-m 0.7.2",
  "cortex-m-rt 0.7.0",
  "defmt",
  "defmt-rtt",
