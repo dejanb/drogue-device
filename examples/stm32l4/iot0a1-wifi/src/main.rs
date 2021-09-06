@@ -24,11 +24,11 @@ use embassy_stm32::{
 };
 use embassy_stm32::spi::{Config, Spi};
 use embassy_stm32::time::Hertz;
-//use defmt::*;
+use defmt::*;
 use embassy_stm32::dma::NoDma;
-//use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::digital::v2::{InputPin, OutputPin};
 
-//use cortex_m::prelude::_embedded_hal_blocking_spi_Transfer;
+use cortex_m::prelude::_embedded_hal_blocking_spi_Transfer;
 use drogue_device::drivers::wifi::eswifi::EsWifiController;
 
 
@@ -55,7 +55,7 @@ async fn main(_spawner: embassy::executor::Spawner, p: Peripherals) {
 
     defmt::info!("Starting up...");
 
-    let spi = Spi::new(
+    let mut spi = Spi::new(
         p.SPI3,
         p.PC10,
         p.PC12,
@@ -66,54 +66,101 @@ async fn main(_spawner: embassy::executor::Spawner, p: Peripherals) {
         Config::default(),
     );
 
+    //let mut cs = Output::new(p.PE0, Level::High, Speed::VeryHigh);
+
     let _boot = Output::new(p.PB12, Level::Low, Speed::VeryHigh);
-    let wake = Output::new(p.PB13, Level::Low, Speed::VeryHigh);
-    let reset = Output::new(p.PE8, Level::Low, Speed::VeryHigh);
-    let cs = Output::new(p.PE0, Level::High, Speed::VeryHigh);
+    let wake = Output::new(p.PB13, Level::High, Speed::VeryHigh);
+    let reset = Output::new(p.PE8, Level::High, Speed::VeryHigh);
+    let mut cs = Output::new(p.PE0, Level::High, Speed::VeryHigh);
     let ready = Input::new(p.PE1, Pull::Up);
 
-    let mut wifi = EsWifiController::new(spi, reset, wake, cs, ready);
-    wifi.start().await;
+    // let mut wifi = XEsWifiController::new(spi, reset, wake, cs, ready);
+    // wifi.testing().await;
+
+    for n in 1..20 {
+        let mut buf = [0x0Au8; 4];
+
+        defmt::unwrap!(cs.set_low());
+        defmt::unwrap!(spi.transfer(&mut buf));
+        defmt::unwrap!(cs.set_high());
+
+        defmt::info!("xfer {=[u8]:x}", buf);
+    }
+
+}
 
 
-    // let ip = wifi.join_wep(WIFI_SSID, WIFI_PSK).await;
-    // defmt::info!("Joined...");
-    // defmt::info!("IP {}", ip);
 
 
-    // DEVICE.configure(MyDevice {
-    //     //wifi: EsWifi::new(enable_pin, reset_pin),
-    //     ticker: ActorContext::new(Ticker::new(Duration::from_millis(500), LedMessage::Toggle)),
-    //     led: ActorContext::new(Led::new(Output::new(p.PA5, Level::High, Speed::Low))),
-    // });
 
-    // DEVICE
-    //     .mount(|device| async move {
-    //         // let mut wifi = device.wifi.mount((), spawner);
-    //         // defmt::info!("wifi {} ", WIFI_SSID);
-    //         // wifi.join(Join::Wpa {
-    //         //     ssid: WIFI_SSID.trim_end(),
-    //         //     password: WIFI_PSK.trim_end(),
-    //         // })
-    //         // .await
-    //         // .expect("Error joining wifi");
-    //         // defmt::info!("WiFi network joined");
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Error<SPI, CS, RESET, READY> {
+    Uninformative,
+    VersionMismatch(u8),
+    CS(CS),
+    Reset(RESET),
+    SPI(SPI),
+    READY(READY),
+    Transmitting,
+}
 
-    //         let led = device.led.mount((), spawner);
-    //         let ticker = device.ticker.mount(led, spawner);
-    //         ticker
-    //     })
-    //     .await;
+use Error::*;
+use embedded_hal::blocking::spi::{Transfer, Write};
 
+pub struct XEsWifiController<SPI, CS, RESET, WAKEUP, READY, E>
+where
+    SPI: Transfer<u8, Error = E> + Write<u8, Error = E>,
+    CS: OutputPin + 'static,
+    RESET: OutputPin + 'static,
+    WAKEUP: OutputPin + 'static,
+    READY: InputPin + 'static,
+    E: 'static,
+{
+    spi: SPI,
+    cs: CS,
+    reset: RESET,
+    wakeup: WAKEUP,
+    ready: READY,
+}
 
-        // let mut i =0;
-        // loop {
-        //     let mut buf = [0x0Au8; 4];
-        //     unwrap!(cs.set_low());
-        //     unwrap!(spi.transfer(&mut buf));
-        //     unwrap!(cs.set_high());
-        //     i = i + 1;
-        //     info!("xfer {=[u8]:x} {}", buf, i);
-        // }
+impl<SPI, CS, RESET, WAKEUP, READY, E> XEsWifiController<SPI, CS, RESET, WAKEUP, READY, E>
+where
+    SPI: Transfer<u8, Error = E> + Write<u8, Error = E>,
+    CS: OutputPin + 'static,
+    RESET: OutputPin + 'static,
+    WAKEUP: OutputPin + 'static,
+    READY: InputPin + 'static,
+    E: 'static,
+{
+    pub fn new(
+        spi: SPI,
+        cs: CS,
+        reset: RESET,
+        wakeup: WAKEUP,
+        ready: READY,
+    ) -> Self {
+        Self {
+            spi,
+            cs,
+            reset,
+            wakeup,
+            ready,
+        }
+    }
 
+    pub async fn testing(&mut self) -> Result<(), Error<E, CS::Error, RESET::Error, READY::Error>>{
+        for n in 1..20 {
+            let mut buf = [0x0Au8; 4];
+
+            self.cs.set_low().map_err(CS)?;
+            self.spi.transfer(&mut buf).map_err(SPI)?;
+            self.cs.set_high().map_err(CS)?;
+
+            defmt::info!("xfer {=[u8]:x}", buf);
+        }
+
+        Ok(())
+
+    }
 }

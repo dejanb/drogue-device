@@ -29,7 +29,7 @@ cortex-m = "0.7.1"
 
 atomic-polyfill = "0.1.3"
 embassy = {git = "https://github.com/embassy-rs/embassy.git", rev = "548593ea415c79472bd2cf2d0c59aadfcf5f715c", default-features = false, features=["defmt", "time"] }
-embassy-stm32 = {git = "https://github.com/embassy-rs/embassy.git", rev = "548593ea415c79472bd2cf2d0c59aadfcf5f715c", default-features = false, features = ["defmt", "stm32l475vg", "time-driver-tim2", "memory-x"] }
+embassy-stm32 = {git = "https://github.com/embassy-rs/embassy.git", rev = "548593ea415c79472bd2cf2d0c59aadfcf5f715c", default-features = false, features = ["defmt", "stm32l4s5vi", "unstable-pac", "time-driver-tim2", "memory-x"] }
 
 
 embedded-hal = { version = "0.2.4", features = ["unproven"] }
